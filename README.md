@@ -8,9 +8,10 @@ Python 3.10+ / TCP socket / newline-delimited JSON / threading / PySide6 / SQLit
 - 服务端支持昵称注册与去重，并广播 `user_join` / `user_leave` / `user_list`。
 - 协议使用“一行一个 UTF-8 JSON，结尾 `\n`”，支持粘包拆包与异常兜底。
 - 支持文本、emoji、图片三类消息，图片以 base64 传输并限制解码后 4MB。
-- 客户端接收图片后统一保存到 `~/.chatroom/images` 并在聊天区内嵌显示。
+- 客户端接收图片后统一保存到 `~/.chatroom/images` 并在聊天气泡中显示缩略图。
 - 每个昵称独立 SQLite 历史记录，重启客户端可重载文本/emoji/图片消息。
 - 点击“清空记录”会发送 `{"type":"delete"}`，服务端广播给所有客户端同步清空。
+- 聊天区使用自定义 Qt 消息气泡控件（非 HTML 文本框），支持左右分列、系统消息居中和千禧年 QQ/XP 银蓝主题。
 
 ## 安装与运行
 
@@ -44,7 +45,8 @@ python main.py
 - `main.py`：客户端入口。
 - `network/server.py`：多线程服务器，负责注册、广播、在线用户和 delete 转发。
 - `network/client.py`：换行分隔 JSON 客户端，后台线程接收并提供发送便捷方法。
-- `ui/chat_window.py`：PySide6 界面、用户注册对话框、消息渲染与本地图片落盘。
+- `ui/chat_window.py`：PySide6 界面、用户注册对话框、自定义消息气泡渲染与本地图片落盘。
+- `ui/theme.py`：集中管理聊天窗口与控件的 QQ/XP 风格 QSS 主题。
 - `db/chat_db.py`：按昵称独立 SQLite 历史记录。
 - `utils/emoji.py`：emoji 分组、扁平列表与 EmojiPicker。
 
