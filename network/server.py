@@ -17,6 +17,10 @@ MAX_TEXT = 4000
 MAX_IMAGE_B64 = 6 * 1024 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
+# 与客户端 picture/ 目录的约定保持一致：avatar_01.png ~ avatar_10.png
+AVATAR_IDS = tuple(f"avatar_{index:02d}" for index in range(1, 11))
+DEFAULT_AVATAR = AVATAR_IDS[0]
+
 
 def timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -104,7 +108,9 @@ class ChatServer:
             self.safe_send(sock, {"type": "error", "message": "请先使用 1-32 个字符的昵称注册"})
             return None
         name = name.strip()
-        avatar = str(message.get("avatar", "😀"))[:8]
+        avatar = str(message.get("avatar", DEFAULT_AVATAR))
+        if avatar not in AVATAR_IDS:
+            avatar = DEFAULT_AVATAR
         with self.lock:
             if any(c.name == name for c in self.clients.values()):
                 self.safe_send(sock, {"type": "error", "message": "昵称已被占用"})
@@ -116,7 +122,7 @@ class ChatServer:
             {
                 "type": "user_join",
                 "user": {"name": name, "avatar": avatar},
-                "message": f"{avatar} {name} 加入了聊天室",
+                "message": f"{name} 加入了聊天室",
                 "timestamp": timestamp(),
             }
         )
@@ -205,7 +211,7 @@ class ChatServer:
                 {
                     "type": "user_leave",
                     "user": {"name": client.name, "avatar": client.avatar},
-                    "message": f"{client.avatar} {client.name} 离开了聊天室",
+                    "message": f"{client.name} 离开了聊天室",
                     "timestamp": timestamp(),
                 }
             )

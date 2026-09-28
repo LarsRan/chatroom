@@ -103,7 +103,7 @@ QPushButton:pressed {
 
 QListWidget#userList::item {
     padding: 2px 6px;
-    min-height: 22px;
+    min-height: 30px;
 }
 
 #systemMessage {

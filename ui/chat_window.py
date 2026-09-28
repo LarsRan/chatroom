@@ -7,18 +7,17 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot, QTimer
-from PySide6.QtGui import QFont, QImage, QPixmap
+from PySide6.QtCore import QObject, QSize, Qt, Signal, Slot, QTimer
+from PySide6.QtGui import QFont, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QFileDialog,
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -29,10 +28,11 @@ from PySide6.QtWidgets import (
 
 from db.chat_db import ChatDatabase
 from network.client import ChatClient
+from ui.login_dialog import LoginDialog
 from ui.theme import apply_chat_theme, bubble_style
+from utils.avatars import avatar_pixmap, is_avatar_id, placeholder_pixmap
 from utils.emoji import EmojiPicker
 
-ALLOWED_AVATARS = ["😀", "😂", "😍", "😭", "😡", "👍", "🎉", "😎", "🤔", "😱"]
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_IMAGE_WIDTH = 240
 
@@ -40,62 +40,6 @@ MAX_IMAGE_WIDTH = 240
 class Bridge(QObject):
     message = Signal(dict)
     disconnected = Signal(str)
-
-
-class UserInfoDialog(QDialog):
-    """用户信息输入框：昵称 + 头像。"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("用户信息")
-        self.setModal(True)
-
-        form = QFormLayout(self)
-        self.name_input = QLineEdit(self)
-        self.name_input.setPlaceholderText("请输入 1-32 字符昵称")
-        self.avatar_combo = QComboBox(self)
-        self.avatar_combo.addItems(ALLOWED_AVATARS)
-        self.host_input = QLineEdit(self)
-        self.host_input.setText("127.0.0.1")
-        self.port_input = QLineEdit(self)
-        self.port_input.setText("8765")
-
-        form.addRow("昵称", self.name_input)
-        form.addRow("头像", self.avatar_combo)
-        form.addRow("服务器 IP", self.host_input)
-        form.addRow("端口", self.port_input)
-
-        buttons = QHBoxLayout()
-        ok_btn = QPushButton("连接", self)
-        cancel_btn = QPushButton("取消", self)
-        ok_btn.clicked.connect(self._submit)
-        cancel_btn.clicked.connect(self.reject)
-        buttons.addWidget(ok_btn)
-        buttons.addWidget(cancel_btn)
-        form.addRow(buttons)
-
-    def _submit(self) -> None:
-        name = self.name_input.text().strip()
-        if not 1 <= len(name) <= 32:
-            QMessageBox.warning(self, "输入错误", "昵称长度必须在 1-32 字符之间")
-            return
-        host = self.host_input.text().strip()
-        if not host:
-            QMessageBox.warning(self, "输入错误", "服务器 IP 不能为空")
-            return
-        port_text = self.port_input.text().strip()
-        if not port_text.isdigit() or not 1 <= int(port_text) <= 65535:
-            QMessageBox.warning(self, "输入错误", "端口必须是 1-65535 的数字")
-            return
-        self.accept()
-
-    def user_info(self) -> tuple[str, str, str, int]:
-        return (
-            self.name_input.text().strip(),
-            self.avatar_combo.currentText(),
-            self.host_input.text().strip(),
-            int(self.port_input.text().strip()),
-        )
 
 
 class SystemMessageWidget(QWidget):
@@ -139,9 +83,17 @@ class MessageBubbleWidget(QWidget):
         root.setContentsMargins(10, 4, 10, 4)
         root.setSpacing(6)
 
-        avatar_label = QLabel(avatar or "🙂", self)
-        avatar_label.setFixedWidth(26)
+        avatar_label = QLabel(self)
         avatar_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        avatar_size = 30
+        if is_avatar_id(avatar):
+            # 头像标识：加载 picture/ 下的图片，文件缺失时用占位头像
+            avatar_label.setPixmap(avatar_pixmap(avatar, avatar_size) or placeholder_pixmap(avatar_size))
+            avatar_label.setFixedSize(avatar_size, avatar_size)
+        else:
+            # 兼容历史记录中保存的 emoji 头像
+            avatar_label.setText(avatar or "🙂")
+            avatar_label.setFixedWidth(26)
 
         bubble_column = QWidget(self)
         bubble_layout = QVBoxLayout(bubble_column)
@@ -223,7 +175,7 @@ class ChatWindow(QMainWindow):
         self.resize(900, 600)
 
         self.name = ""
-        self.avatar = "😀"
+        self.avatar = "avatar_01"
         self.db: ChatDatabase | None = None
         self.client: ChatClient | None = None
         self.images = Path.home() / ".chatroom" / "images"
@@ -287,6 +239,7 @@ class ChatWindow(QMainWindow):
         self.input.setPlaceholderText("输入消息，回车发送")
         self.users = QListWidget()
         self.users.setObjectName("userList")
+        self.users.setIconSize(QSize(24, 24))
 
         left.addWidget(self.scroll)
         left.addWidget(self.input)
@@ -323,14 +276,14 @@ class ChatWindow(QMainWindow):
         apply_chat_theme(self)
 
     def login(self) -> None:
-        dialog = UserInfoDialog(self)
+        dialog = LoginDialog(self)
         if dialog.exec() != QDialog.Accepted:
             self.close()
             return
-        name, avatar, host, port = dialog.user_info()
+        name, avatar_id, host, port = dialog.user_info()
 
         self.name = name
-        self.avatar = avatar
+        self.avatar = avatar_id
         self.db = ChatDatabase(self.name)
         self.reload_history()
 
@@ -422,9 +375,16 @@ class ChatWindow(QMainWindow):
             self.render_chat(message)
         elif kind == "user_list":
             self.users.clear()
-            self.users.addItems(
-                [f"{user.get('avatar', '')} {user.get('name', '')}" for user in message.get("users", [])]
-            )
+            for user in message.get("users", []):
+                name = str(user.get("name", ""))
+                avatar_id = str(user.get("avatar", ""))
+                item = QListWidgetItem(name)
+                if is_avatar_id(avatar_id):
+                    pixmap = avatar_pixmap(avatar_id, 24) or placeholder_pixmap(24)
+                    item.setIcon(QIcon(pixmap))
+                else:
+                    item.setText(f"{avatar_id} {name}".strip())
+                self.users.addItem(item)
         elif kind in {"user_join", "user_leave"}:
             self.render_system(message.get("message", "用户状态变更"))
         elif kind == "system":
@@ -433,7 +393,7 @@ class ChatWindow(QMainWindow):
             if self.db:
                 self.db.clear()
             self.reload_history()
-            self.render_system(f"{message.get('avatar', '')} {message.get('sender', '')} 清空了聊天记录")
+            self.render_system(f"{message.get('sender', '')} 清空了聊天记录")
         elif kind == "error":
             QMessageBox.warning(self, "服务器提示", message.get("message", "未知错误"))
 

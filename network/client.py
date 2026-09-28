@@ -21,7 +21,8 @@ class ChatClient:
         self.running = threading.Event()
         self.send_lock = threading.Lock()
 
-    def connect(self, host: str, port: int, name: str, avatar: str = "😀") -> None:
+    def connect(self, host: str, port: int, name: str, avatar: str = "avatar_01") -> None:
+        # avatar 为头像标识（avatar_01 ~ avatar_10），由登录对话框选择后传入
         self.close()
         self.sock = socket.create_connection((host, port), timeout=8)
         self.sock.settimeout(None)
