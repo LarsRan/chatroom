@@ -1,4 +1,4 @@
-# 局域网聊天室
+# 聊天室
 
 Python 3.10+ / TCP socket / newline-delimited JSON / threading / PySide6 / SQLite。
 
