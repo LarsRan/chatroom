@@ -219,7 +219,7 @@ class ChatWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("局域网聊天室")
+        self.setWindowTitle("聊天室")
         self.resize(900, 600)
 
         self.name = ""
