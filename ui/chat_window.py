@@ -250,7 +250,7 @@ class ChatWindow(QMainWindow):
         title.setObjectName("titleBar")
         title_layout = QHBoxLayout(title)
         title_layout.setContentsMargins(8, 4, 8, 4)
-        title_text = QLabel("局域网聊天室", title)
+        title_text = QLabel("聊天室", title)
         title_text.setObjectName("titleLabel")
         title_layout.addWidget(title_text)
         title_layout.addStretch(1)
